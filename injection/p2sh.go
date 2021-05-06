@@ -5,7 +5,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -29,14 +28,12 @@ func P2SHScriptAddr(data []byte, pubKey *btcec.PublicKey, network *chaincfg.Para
 	return btcutil.NewAddressScriptHash(redeemScript, network)
 }
 
-func P2SHBuildTX(data []byte, utxoHash string, utxoPos uint32, txOut *wire.TxOut, key *btcec.PrivateKey, network *chaincfg.Params) ([]byte, error) {
+func P2SHBuildTX(data []byte, prevOut *wire.OutPoint, txOut *wire.TxOut, key *btcec.PrivateKey, network *chaincfg.Params) ([]byte, error) {
 	tx := wire.NewMsgTx(wire.TxVersion)
 	tx.AddTxOut(txOut)
 
-	h, _ := chainhash.NewHashFromStr(utxoHash)
-	prevOut := wire.NewOutPoint(h, utxoPos)
 	txIn := wire.NewTxIn(prevOut, nil, nil)
-	txIn.Sequence = 0xFFFFFFFF
+
 	tx.AddTxIn(txIn)
 
 	chunks := dataToChunks(data, P2SHPushDataLimit)
