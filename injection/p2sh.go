@@ -1,8 +1,7 @@
 package injection
 
 import (
-	"bytes"
-
+	"github.com/aureleoules/bitcandle/consensus"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -10,13 +9,10 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
-// P2SHPushDataLimit represents the maximum size of data that can be pushed on the stack at a time in a Bitcoin script
-const P2SHPushDataLimit = 520
-
 func P2SHScriptAddr(data []byte, pubKey *btcec.PublicKey, network *chaincfg.Params) (*btcutil.AddressScriptHash, error) {
 	// Split data into chunks of 520 bytes
 	// This is the maximum of data that can be pushed on the stack at a time
-	chunks := dataToChunks(data, P2SHPushDataLimit)
+	chunks := dataToChunks(data, consensus.P2SHPushDataLimit)
 
 	// Build redeem script
 	redeemScript, err := buildRedeemScript(pubKey, chunks)
@@ -28,7 +24,7 @@ func P2SHScriptAddr(data []byte, pubKey *btcec.PublicKey, network *chaincfg.Para
 	return btcutil.NewAddressScriptHash(redeemScript, network)
 }
 
-func P2SHBuildTX(data []byte, prevOut *wire.OutPoint, txOut *wire.TxOut, key *btcec.PrivateKey, network *chaincfg.Params) ([]byte, error) {
+func P2SHBuildTX(data []byte, prevOut *wire.OutPoint, txOut *wire.TxOut, key *btcec.PrivateKey, network *chaincfg.Params) (*wire.MsgTx, error) {
 	tx := wire.NewMsgTx(wire.TxVersion)
 	tx.AddTxOut(txOut)
 
@@ -36,13 +32,10 @@ func P2SHBuildTX(data []byte, prevOut *wire.OutPoint, txOut *wire.TxOut, key *bt
 
 	tx.AddTxIn(txIn)
 
-	chunks := dataToChunks(data, P2SHPushDataLimit)
+	chunks := dataToChunks(data, consensus.P2SHPushDataLimit)
 	tx.TxIn[0].SignatureScript, _ = buildSignatureScript(tx, chunks, key)
 
-	var txBytes bytes.Buffer
-	tx.Serialize(&txBytes)
-
-	return txBytes.Bytes(), nil
+	return tx, nil
 }
 
 func buildSignatureScript(tx *wire.MsgTx, chunks [][]byte, key *btcec.PrivateKey) ([]byte, error) {

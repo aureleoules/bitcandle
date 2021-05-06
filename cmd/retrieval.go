@@ -1,23 +1,36 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/aureleoules/bitcandle/retrieval"
+	"github.com/briandowns/spinner"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/checksum0/go-electrum/electrum"
+	"github.com/guumaster/logsymbols"
 	"github.com/spf13/cobra"
+	"github.com/thediveo/enumflag"
 )
 
 var (
-	txHash     string
-	outputFile string
+	txHash         string
+	outputFile     string
+	electrumServer string
 )
 
 func init() {
 	retrieveCmd.Flags().StringVar(&txHash, "tx", "", "txid of the file to retrieve")
 	retrieveCmd.Flags().StringVarP(&outputFile, "output", "o", "", "output file path")
+	retrieveCmd.Flags().StringVarP(&electrumServer, "server", "s", "", "electrum server")
+
+	retrieveCmd.PersistentFlags().VarP(
+		enumflag.New(&network, "network", NetworkIds, enumflag.EnumCaseInsensitive), "network", "n", "bitcoin network; can be 'mainnet', 'testnet' or 'regtest'")
 
 	rootCmd.AddCommand(retrieveCmd)
 }
@@ -34,30 +47,64 @@ var retrieveCmd = &cobra.Command{
 			errRetrieveHelp("no output path was specified")
 		}
 
+		if electrumServer == "" {
+			electrumServer = getDefaultElectrumServer(network)
+		}
+
+		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Connecting to electrum server..."))
+		s.Start()
+
 		client := electrum.NewServer()
-		err := client.ConnectTCP("127.0.0.1:50001")
+		err := client.ConnectTCP(electrumServer)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(logsymbols.Error, "Could not connect to electrum server.")
 			os.Exit(1)
 		}
 
-		tx, err := client.GetTransaction(txHash)
+		s.Stop()
+		fmt.Println(logsymbols.Success, "Connected to electrum server ("+electrumServer+").")
+
+		rawtx, err := client.GetRawTransaction(txHash)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
 			os.Exit(1)
 		}
 
-		data, err := retrieval.P2SHRetrieveData(tx.Vin[0].ScriptSig.Asm)
+		var tx wire.MsgTx
+		rawtxBytes, err := hex.DecodeString(rawtx)
 		if err != nil {
-			fmt.Println(err)
+			s.Stop()
+			fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
 			os.Exit(1)
 		}
+		err = tx.Deserialize(bytes.NewReader(rawtxBytes))
+		if err != nil {
+			s.Stop()
+			fmt.Println(logsymbols.Error, "Could not decode transaction.")
+			os.Exit(1)
+		}
+
+		asmScript, err := txscript.DisasmString(tx.TxIn[0].SignatureScript)
+		if err != nil {
+			fmt.Println(logsymbols.Error, "Could not disassemble script signature.")
+			os.Exit(1)
+		}
+
+		data, err := retrieval.P2SHRetrieveData(asmScript)
+		if err != nil {
+			fmt.Println(logsymbols.Error, "Could not parse data.")
+			os.Exit(1)
+		}
+
+		fmt.Println(logsymbols.Success, "Retrieved file.")
 
 		err = ioutil.WriteFile(outputFile, data, 0644)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(logsymbols.Error, "Could not write to output file.")
 			os.Exit(1)
 		}
+
+		fmt.Println(logsymbols.Success, "Saved file to \""+outputFile+"\".")
 	},
 }
 

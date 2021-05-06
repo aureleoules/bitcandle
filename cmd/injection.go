@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -8,13 +9,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/aureleoules/bitcandle/consensus"
 	"github.com/aureleoules/bitcandle/injection"
+	"github.com/briandowns/spinner"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/checksum0/go-electrum/electrum"
+	"github.com/guumaster/logsymbols"
+	"github.com/mdp/qrterminal"
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag"
 )
@@ -25,6 +30,7 @@ var (
 	network         Network
 	injectionMethod InjectionMethod
 	feeRate         int
+	changeAddress   string
 )
 
 type InjectionMethod enumflag.Flag
@@ -70,6 +76,7 @@ func init() {
 
 	injectCmd.Flags().StringVarP(&filePath, "file", "f", "", "path of the file to inject on Bitcoin")
 	injectCmd.Flags().StringVarP(&privateKeyPath, "key", "k", "key.hex", "path of a private key to sign transactions")
+	injectCmd.Flags().StringVarP(&changeAddress, "change-addr", "c", "", "address to receive change (548 sats)")
 	injectCmd.Flags().IntVar(&feeRate, "fee", 5, "fee rate (sat/B)")
 
 	rootCmd.AddCommand(injectCmd)
@@ -87,17 +94,21 @@ var injectCmd = &cobra.Command{
 			errInjectHelp("missing private key path")
 		}
 
+		if electrumServer == "" {
+			electrumServer = getDefaultElectrumServer(network)
+		}
+
 		data, err := ioutil.ReadFile(filePath)
 		if err != nil {
 			errInjectHelp(err.Error())
 		}
-
-		fmt.Println(len(data), "bytes loaded.")
+		fmt.Println(logsymbols.Success, "Loaded", len(data), "bytes to inject.")
 
 		key, err := loadKey(privateKeyPath)
 		if err != nil {
 			errInjectHelp(err.Error())
 		}
+		fmt.Println(logsymbols.Success, "Loaded private key.")
 
 		netParams := loadChainParams(network)
 
@@ -105,6 +116,7 @@ var injectCmd = &cobra.Command{
 		if err != nil {
 			errInjectHelp(err.Error())
 		}
+		fmt.Println(logsymbols.Success, "Generated P2SH address.")
 
 		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams)
 		if err != nil {
@@ -124,15 +136,26 @@ var injectCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		paymentAmount := len(dummyTx)*feeRate + 546
-		fmt.Printf("You must send %.8f BTC to %s.\n", float64(paymentAmount)/100000000, p2shAddr)
+		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Connecting to electrum server..."))
+		s.Start()
 
 		client := electrum.NewServer()
-		err = client.ConnectTCP("127.0.0.1:50001")
+		err = client.ConnectTCP(electrumServer)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(logsymbols.Error, "Could not connect to electrum server.")
 			os.Exit(1)
 		}
+
+		s.Stop()
+		fmt.Println(logsymbols.Success, "Connected to electrum server ("+electrumServer+").")
+
+		var dummyTxBytes bytes.Buffer
+		dummyTx.Serialize(&dummyTxBytes)
+
+		paymentAmount := float64(len(dummyTxBytes.Bytes())*feeRate+consensus.P2PKHDustLimit) / 100_000_000
+		fmt.Println(logsymbols.Info, fmt.Sprintf("You must send %.8f BTC to %s.", paymentAmount, p2shAddr))
+
+		qrterminal.GenerateHalfBlock(fmt.Sprintf("bitcoin:%s?amount=%.8f", p2shAddr.EncodeAddress(), paymentAmount), qrterminal.L, os.Stdout)
 
 		script, err := txscript.PayToAddrScript(p2shAddr)
 		scriptHash := sha256.Sum256(script)
@@ -142,52 +165,86 @@ var injectCmd = &cobra.Command{
 		receivedPayment := false
 		var prevOut *wire.OutPoint
 
+		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Waiting for payment..."))
+		s.Start()
+
 		for !receivedPayment {
 			history, err := client.GetHistory(reversedScriptHashHex)
 			if err != nil {
-				fmt.Println(err)
+				s.Stop()
+				fmt.Println(logsymbols.Error, "Could not retrieve transactions.")
 				os.Exit(1)
 			}
 
 			for _, h := range history {
-				tx, err := client.GetTransaction(h.Hash)
+				rawtx, err := client.GetRawTransaction(h.Hash)
 				if err != nil {
-					fmt.Println(err)
+					s.Stop()
+					fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
 					os.Exit(1)
 				}
 
-				for _, vout := range tx.Vout {
-					if vout.ScriptPubkey.Hex == hex.EncodeToString(script) {
-						fmt.Println("Payment successfully retrieved.")
+				var tx wire.MsgTx
+				rawtxBytes, err := hex.DecodeString(rawtx)
+				if err != nil {
+					s.Stop()
+					fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
+					os.Exit(1)
+				}
+				err = tx.Deserialize(bytes.NewReader(rawtxBytes))
+				if err != nil {
+					s.Stop()
+					fmt.Println(logsymbols.Error, "Could not decode transaction.")
+					os.Exit(1)
+				}
+
+				for i, vout := range tx.TxOut {
+					if bytes.Equal(vout.PkScript, script) {
 						receivedPayment = true
 						txHash, err := chainhash.NewHashFromStr(h.Hash)
 						if err != nil {
-							fmt.Println(err)
+							s.Stop()
+							fmt.Println(logsymbols.Error, "Invalid transaction id.")
 							os.Exit(1)
 						}
-						prevOut = wire.NewOutPoint(txHash, vout.N)
+						prevOut = wire.NewOutPoint(txHash, uint32(i))
 						break
 					}
 				}
 			}
-
-			time.Sleep(time.Second)
+			if !receivedPayment {
+				time.Sleep(time.Second)
+			}
 		}
+		s.Stop()
+		fmt.Println(logsymbols.Success, "Payment received.")
 
-		tx, err := injection.P2SHBuildTX(data, prevOut, wire.NewTxOut(546, payToAddrScript), key, netParams)
+		tx, err := injection.P2SHBuildTX(data, prevOut, wire.NewTxOut(consensus.P2PKHDustLimit, payToAddrScript), key, netParams)
 		if err != nil {
+			s.Stop()
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		txid, err := client.BroadcastTransaction(hex.EncodeToString(tx))
+		fmt.Println(logsymbols.Info, "Expected TxID:", tx.TxHash())
+
+		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Broadcasting transaction..."))
+		s.Start()
+
+		var txBytes bytes.Buffer
+		tx.Serialize(&txBytes)
+
+		txid, err := client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
 		if err != nil {
+			s.Stop()
+			fmt.Println(logsymbols.Error, "Could not broadcast transaction.")
 			fmt.Println(err)
 			os.Exit(1)
 		}
+		s.Stop()
 
-		fmt.Println("Successfully injected data on Bitcoin.")
-		fmt.Println("File txid:", txid)
+		fmt.Println(logsymbols.Success, "Data injected.")
+		fmt.Println(logsymbols.Info, "TxID:", txid)
 	},
 }
 
