@@ -178,8 +178,6 @@ func buildRedeemScript(pubKey *btcec.PublicKey, chunks [][]byte) ([]byte, error)
 		redeemScript.AddOp(txscript.OP_EQUALVERIFY)
 	}
 
-	redeemScript.AddOp(txscript.OP_TRUE)
-
 	// Verify tx signature such that the transaction output cannot be redirected to another address
 	// This may not be useful if vout value is equal or close to a dust amount as removing the signature verification would save at most 107 bytes (73 sig + 33 pub + 1 opcode)
 	redeemScript.AddData(pubKey.SerializeCompressed())
