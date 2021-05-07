@@ -10,7 +10,6 @@ import (
 
 	"github.com/aureleoules/bitcandle/retrieval"
 	"github.com/briandowns/spinner"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/checksum0/go-electrum/electrum"
 	"github.com/guumaster/logsymbols"
@@ -84,13 +83,7 @@ var retrieveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		asmScript, err := txscript.DisasmString(tx.TxIn[0].SignatureScript)
-		if err != nil {
-			fmt.Println(logsymbols.Error, "Could not disassemble script signature.")
-			os.Exit(1)
-		}
-
-		data, err := retrieval.P2SHRetrieveData(asmScript)
+		data, err := retrieval.P2SHRetrieveData(tx.TxIn)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not parse data.")
 			os.Exit(1)

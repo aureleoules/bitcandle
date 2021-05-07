@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/aureleoules/bitcandle/consensus"
@@ -104,6 +105,10 @@ var injectCmd = &cobra.Command{
 		}
 		fmt.Println(logsymbols.Success, "Loaded", len(data), "bytes to inject.")
 
+		if len(data) > consensus.P2SHInputDataLimit {
+			fmt.Println(logsymbols.Warn, fmt.Sprintf("File is too large (> %d bytes) for a single input.", consensus.P2SHInputDataLimit))
+		}
+
 		key, err := loadKey(privateKeyPath)
 		if err != nil {
 			errInjectHelp(err.Error())
@@ -112,27 +117,9 @@ var injectCmd = &cobra.Command{
 
 		netParams := loadChainParams(network)
 
-		p2shAddr, err := injection.P2SHScriptAddr(data, key.PubKey(), netParams)
+		inject, err := injection.NewP2SHInjection(data, feeRate, key, netParams)
 		if err != nil {
-			errInjectHelp(err.Error())
-		}
-		fmt.Println(logsymbols.Success, "Generated P2SH address.")
-
-		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		payToAddrScript, err := txscript.PayToAddrScript(addr)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		dummyPrevOut := wire.NewOutPoint(chaincfg.MainNetParams.GenesisHash, 0)
-		dummyTx, err := injection.P2SHBuildTX(data, dummyPrevOut, wire.NewTxOut(0, payToAddrScript), key, netParams)
-		if err != nil {
-			fmt.Println(err)
+			fmt.Println(logsymbols.Error, "Could not prepare injection data.")
 			os.Exit(1)
 		}
 
@@ -149,79 +136,125 @@ var injectCmd = &cobra.Command{
 		s.Stop()
 		fmt.Println(logsymbols.Success, "Connected to electrum server ("+electrumServer+").")
 
-		var dummyTxBytes bytes.Buffer
-		dummyTx.Serialize(&dummyTxBytes)
+		cost, costPerInput, err := inject.EstimateCost()
+		if err != nil {
+			fmt.Println(logsymbols.Error, "Could not estimate injection cost.")
+			os.Exit(1)
+		}
 
-		paymentAmount := float64(len(dummyTxBytes.Bytes())*feeRate+consensus.P2PKHDustLimit) / 100_000_000
-		fmt.Println(logsymbols.Info, fmt.Sprintf("You must send %.8f BTC to %s.", paymentAmount, p2shAddr))
+		fmt.Println(logsymbols.Info, fmt.Sprintf("Estimated injection cost: %.8f BTC.", cost))
 
-		qrterminal.GenerateHalfBlock(fmt.Sprintf("bitcoin:%s?amount=%.8f", p2shAddr.EncodeAddress(), paymentAmount), qrterminal.L, os.Stdout)
+		for _, addr := range inject.Addresses {
+			fmt.Println(logsymbols.Info, fmt.Sprintf("You must send %.8f BTC to %s.", costPerInput, addr.Address.EncodeAddress()))
 
-		script, err := txscript.PayToAddrScript(p2shAddr)
-		scriptHash := sha256.Sum256(script)
-		reversedScriptHash := ReverseBytes(scriptHash[:])
-		reversedScriptHashHex := hex.EncodeToString(reversedScriptHash)
-
-		receivedPayment := false
-		var prevOut *wire.OutPoint
-
-		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Waiting for payment..."))
-		s.Start()
-
-		for !receivedPayment {
-			history, err := client.GetHistory(reversedScriptHashHex)
-			if err != nil {
-				s.Stop()
-				fmt.Println(logsymbols.Error, "Could not retrieve transactions.")
-				os.Exit(1)
-			}
-
-			for _, h := range history {
-				rawtx, err := client.GetRawTransaction(h.Hash)
-				if err != nil {
-					s.Stop()
-					fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
-					os.Exit(1)
-				}
-
-				var tx wire.MsgTx
-				rawtxBytes, err := hex.DecodeString(rawtx)
-				if err != nil {
-					s.Stop()
-					fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
-					os.Exit(1)
-				}
-				err = tx.Deserialize(bytes.NewReader(rawtxBytes))
-				if err != nil {
-					s.Stop()
-					fmt.Println(logsymbols.Error, "Could not decode transaction.")
-					os.Exit(1)
-				}
-
-				for i, vout := range tx.TxOut {
-					if bytes.Equal(vout.PkScript, script) {
-						receivedPayment = true
-						txHash, err := chainhash.NewHashFromStr(h.Hash)
-						if err != nil {
-							s.Stop()
-							fmt.Println(logsymbols.Error, "Invalid transaction id.")
-							os.Exit(1)
-						}
-						prevOut = wire.NewOutPoint(txHash, uint32(i))
-						break
-					}
-				}
-			}
-			if !receivedPayment {
-				time.Sleep(time.Second)
+			if len(inject.Addresses) == 1 {
+				qrterminal.GenerateHalfBlock(fmt.Sprintf("bitcoin:%s?amount=%.8f", addr.Address.EncodeAddress(), costPerInput), qrterminal.L, os.Stdout)
 			}
 		}
-		s.Stop()
-		fmt.Println(logsymbols.Success, "Payment received.")
 
-		tx, err := injection.P2SHBuildTX(data, prevOut, wire.NewTxOut(consensus.P2PKHDustLimit, payToAddrScript), key, netParams)
+		if len(inject.Addresses) > 1 {
+			fmt.Println(logsymbols.Info, "Copy paste this in Electrum -> Tools -> Pay to many.")
+			fmt.Println()
+			for _, addr := range inject.Addresses {
+				fmt.Println(fmt.Sprintf("%s,%.8f", addr.Address.EncodeAddress(), costPerInput))
+			}
+			fmt.Println()
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(inject.NumInputs())
+
+		var paymentsReceived int
+
+		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Waiting for payments..."))
+		s.Start()
+
+		for j, p2shAddr := range inject.Addresses {
+			go func(addr *btcutil.AddressScriptHash, j int) {
+				defer wg.Done()
+
+				for {
+					script, err := txscript.PayToAddrScript(addr)
+					if err != nil {
+						fmt.Println(logsymbols.Error, "Could not build P2SH script.")
+					}
+					scriptHash := sha256.Sum256(script)
+					reversedScriptHash := ReverseBytes(scriptHash[:])
+					reversedScriptHashHex := hex.EncodeToString(reversedScriptHash)
+
+					history, err := client.GetHistory(reversedScriptHashHex)
+					if err != nil {
+						s.Stop()
+						fmt.Println(logsymbols.Error, "Could not retrieve transactions.")
+						os.Exit(1)
+					}
+
+					for _, h := range history {
+						rawtx, err := client.GetRawTransaction(h.Hash)
+						if err != nil {
+							s.Stop()
+							fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
+							os.Exit(1)
+						}
+
+						var tx wire.MsgTx
+						rawtxBytes, err := hex.DecodeString(rawtx)
+						if err != nil {
+							s.Stop()
+							fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
+							os.Exit(1)
+						}
+						err = tx.Deserialize(bytes.NewReader(rawtxBytes))
+						if err != nil {
+							s.Stop()
+							fmt.Println(logsymbols.Error, "Could not decode transaction.")
+							os.Exit(1)
+						}
+
+						for i, vout := range tx.TxOut {
+							if bytes.Equal(vout.PkScript, script) {
+								txHash, err := chainhash.NewHashFromStr(h.Hash)
+								if err != nil {
+									s.Stop()
+									fmt.Println(logsymbols.Error, "Invalid transaction id.")
+									os.Exit(1)
+								}
+
+								inject.Addresses[j].UTXO = wire.NewOutPoint(txHash, uint32(i))
+
+								paymentsReceived++
+								s.Stop()
+								fmt.Println(logsymbols.Success, fmt.Sprintf("Payment received. (%d/%d)", paymentsReceived, inject.NumInputs()))
+								s.Start()
+								return
+							}
+						}
+					}
+
+					time.Sleep(time.Second)
+				}
+			}(p2shAddr.Address, j)
+		}
+
+		wg.Wait()
+
+		s.Stop()
+		fmt.Println(logsymbols.Success, "All payments received.")
+
+		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams) // chain params do not matter
 		if err != nil {
-			s.Stop()
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		payToAddrScript, err := txscript.PayToAddrScript(addr)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		tx, err := inject.BuildTX(wire.NewTxOut(consensus.P2PKHDustLimit, payToAddrScript))
+		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
@@ -236,6 +269,8 @@ var injectCmd = &cobra.Command{
 
 			var txBytes bytes.Buffer
 			tx.Serialize(&txBytes)
+
+			fmt.Println(hex.EncodeToString(txBytes.Bytes()))
 
 			txid, err := client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
 			if err != nil {
