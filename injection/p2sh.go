@@ -117,25 +117,33 @@ func (i *P2SHInjection) buildTX(txOut *wire.TxOut, dummy bool) (*wire.MsgTx, err
 	tx := wire.NewMsgTx(wire.TxVersion)
 	tx.AddTxOut(txOut)
 
-	for k, addr := range i.Addresses {
+	for _, addr := range i.Addresses {
 		if dummy {
 			addr.UTXO = wire.NewOutPoint(chaincfg.MainNetParams.GenesisHash, 0)
 		}
 
 		txIn := wire.NewTxIn(addr.UTXO, nil, nil)
 		tx.AddTxIn(txIn)
+	}
 
-		var err error
-		tx.TxIn[k].SignatureScript, err = buildSignatureScript(tx, addr.Chunks, i.privateKey, dummy)
+	var scriptSigs [][]byte
+
+	for k, addr := range i.Addresses {
+		scriptSig, err := buildSignatureScript(tx, addr.Chunks, i.privateKey, k, dummy)
 		if err != nil {
 			return nil, err
 		}
+		scriptSigs = append(scriptSigs, scriptSig)
+	}
+
+	for k := range scriptSigs {
+		tx.TxIn[k].SignatureScript = scriptSigs[k]
 	}
 
 	return tx, nil
 }
 
-func buildSignatureScript(tx *wire.MsgTx, chunks [][]byte, key *btcec.PrivateKey, dummy bool) ([]byte, error) {
+func buildSignatureScript(tx *wire.MsgTx, chunks [][]byte, key *btcec.PrivateKey, inputIndex int, dummy bool) ([]byte, error) {
 	redeemScript, err := buildRedeemScript(key.PubKey(), chunks)
 	if err != nil {
 		return nil, err
@@ -147,7 +155,7 @@ func buildSignatureScript(tx *wire.MsgTx, chunks [][]byte, key *btcec.PrivateKey
 		sig = make([]byte, consensus.ECDSAMaxSignatureSize)
 	} else {
 		// Sign transaction pre-image
-		sig, err = txscript.RawTxInSignature(tx, 0, redeemScript, txscript.SigHashAll, key)
+		sig, err = txscript.RawTxInSignature(tx, inputIndex, redeemScript, txscript.SigHashSingle, key)
 		if err != nil {
 			return nil, err
 		}
