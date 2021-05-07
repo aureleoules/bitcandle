@@ -226,25 +226,28 @@ var injectCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println(logsymbols.Info, "Expected TxID:", tx.TxHash())
+		_, err = client.GetRawTransaction(tx.TxHash().String())
+		if err == nil {
+			fmt.Println(logsymbols.Warn, "Data already injected.")
+			fmt.Println(logsymbols.Info, "TxID:", tx.TxHash().String())
+		} else {
+			s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Broadcasting transaction..."))
+			s.Start()
 
-		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Broadcasting transaction..."))
-		s.Start()
+			var txBytes bytes.Buffer
+			tx.Serialize(&txBytes)
 
-		var txBytes bytes.Buffer
-		tx.Serialize(&txBytes)
-
-		txid, err := client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
-		if err != nil {
+			txid, err := client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
+			if err != nil {
+				s.Stop()
+				fmt.Println(logsymbols.Error, "Could not broadcast transaction.")
+				fmt.Println(err)
+				os.Exit(1)
+			}
 			s.Stop()
-			fmt.Println(logsymbols.Error, "Could not broadcast transaction.")
-			fmt.Println(err)
-			os.Exit(1)
+			fmt.Println(logsymbols.Success, "Data injected.")
+			fmt.Println(logsymbols.Info, "TxID:", txid)
 		}
-		s.Stop()
-
-		fmt.Println(logsymbols.Success, "Data injected.")
-		fmt.Println(logsymbols.Info, "TxID:", txid)
 	},
 }
 
