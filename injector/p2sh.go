@@ -46,7 +46,7 @@ func NewP2SHInjection(data []byte, feeRate int, key *btcec.PrivateKey, network *
 	injection := P2SHInjection{
 		// Create as many inputs as needed
 		// There can only be 1461 bytes encoded in each input
-		parts:      dataToParts(data),
+		parts:      dataToChunks(data, consensus.P2SHInputDataLimit),
 		Network:    network,
 		FeeRate:    feeRate,
 		privateKey: key,
@@ -87,23 +87,23 @@ func (i *P2SHInjection) NumInputs() int {
 
 // EstimateCost creates a dummy transaction containing all signature scripts required to store the file
 // This allows us to estimate the final transaction size in bytes
-func (i *P2SHInjection) EstimateCost() (float64, float64, error) {
+func (i *P2SHInjection) EstimateCost() (float64, float64, int, error) {
 	// Generate dummy private key
 	dummyKey, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	// Create dummy P2PKH address
 	addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(dummyKey.PubKey().SerializeCompressed()), &chaincfg.RegressionNetParams) // chain params do not matter
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	// Build P2PKH dummy script
 	payToAddrScript, err := txscript.PayToAddrScript(addr)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	// Add dummy UTXOs to Tx
@@ -115,7 +115,7 @@ func (i *P2SHInjection) EstimateCost() (float64, float64, error) {
 	// Build dummy TX
 	dummyTx, err := i.buildTX(wire.NewTxOut(0, payToAddrScript), true)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	var dummyTxBytes bytes.Buffer
@@ -127,7 +127,7 @@ func (i *P2SHInjection) EstimateCost() (float64, float64, error) {
 	// Funds that must be sent to each address
 	costPerInput := math.Ceil(costSats/float64(i.NumInputs())) / consensus.BTCSats
 
-	return float64(costSats) / consensus.BTCSats, costPerInput, nil
+	return float64(costSats) / consensus.BTCSats, costPerInput, len(dummyTxBytes.Bytes()), nil
 }
 
 // BuildTX constructs the final transaction containing the file
@@ -235,7 +235,7 @@ func (i *P2SHInjection) WaitPayments(onPayment func(addr string, num int)) error
 	// Add number of utxos to wait for
 	wg.Add(i.NumInputs())
 
-	_, costPerInput, err := i.EstimateCost()
+	_, costPerInput, _, err := i.EstimateCost()
 	if err != nil {
 		return err
 	}

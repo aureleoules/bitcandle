@@ -23,23 +23,14 @@ func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
 		scriptParts := strings.Split(asmScript, " ")
 		chunks := scriptParts[1 : len(scriptParts)-1]
 
-		skipped := false
-
 		for _, c := range chunks {
 			chunkBytes, err := hex.DecodeString(c)
 			if err != nil {
 				return nil, err
 			}
 
-			if !skipped {
-				// Make sure to skip the first byte of each input's signature script
-				// as the input index is store there to build a different redeem script for each utxo
-				data = append(data, chunkBytes[1:]...)
-				skipped = true
-			} else {
-				// Concat each chunk of 520 bytes (max)
-				data = append(data, chunkBytes...)
-			}
+			// Concat each chunk of 520 bytes (max)
+			data = append(data, chunkBytes...)
 
 		}
 	}
