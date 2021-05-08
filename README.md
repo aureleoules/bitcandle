@@ -105,7 +105,7 @@ The user must send enough funds to this address so that this UTXO can be spent.
 Hashes of chunks are pushed on the stack in order to ensure data integrity.  
 Once we spend this UTXO, at attacker could scramble chunks of data and the transaction would this be valid if these op codes were not added.  
 
-We must also add the PUBKEY and the CHECKSIG op code such that an attacker cannot redirect the output change to another change address. This may not be necessary for small change amounts (minimum on mainnet is 548 sats) but it is recommended as it makes sure the transaction id does not change while the transaction is in the mempool.  
+We must also add the PUBKEY and the CHECKSIG op code such that an attacker cannot redirect the output change to another change address. This may not be necessary for small change amounts (minimum on mainnet is 546 sats) but it is recommended as it makes sure the transaction id does not change while the transaction is in the mempool.  
 
 This redeem script ensures data integrity and prevents output sniping.  
 
