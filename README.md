@@ -75,7 +75,8 @@ $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle retrieve [args]
 ```
 
 ## Cost
-It costs roughly **0.000011940 BTC / kB** to store data. (**1 sat/B** fee rate)  
+Before injecting data we need to create P2SH UTXOs. This can be done in a single transaction, sent by the user, by sending coins to many outputs.   
+To spend the P2SH UTXOs (injecting data), it costs roughly **0.000011940 BTC per kB**. (**1 sat/B** fee rate)  
 It is _obviously_ free to retrieve data at any given time.
 
 ## How it works
@@ -102,7 +103,7 @@ This redeem script is hashed and wrapped in a P2SH output script to create a P2S
 The user must send enough funds to this address so that this UTXO can be spent.  
 
 Hashes of chunks are pushed on the stack in order to ensure data integrity.  
-Once we spend this UTXO, at attacker could scramble chunks of data and the transaction would this be valid if these op codes we not added.  
+Once we spend this UTXO, at attacker could scramble chunks of data and the transaction would this be valid if these op codes were not added.  
 
 We must also add the PUBKEY and the CHECKSIG op code such that an attacker cannot redirect the output change to another change address. This may not be necessary for small change amounts (minimum on mainnet is 548 sats) but it is recommended as it makes sure the transaction id does not change while the transaction is in the mempool.  
 
@@ -119,6 +120,9 @@ It looks something like this:
 
 Chunks of data pushed using the PUSHDATA op code can only fit a maximum of 520 bytes which means the redeem script can only be 520 bytes.  
 So we are only able to store 1461 bytes per UTXO. For larger files, multiple UTXOs must be created using different redeem scripts.
+
+### Notes
+Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.
 
 ## Use cases
 This software can be useful to

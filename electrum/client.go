@@ -1,7 +1,7 @@
 package electrum
 
 import (
-	"github.com/checksum0/go-electrum/electrum"
+	"github.com/aureleoules/go-electrum/electrum"
 )
 
 var Client = electrum.NewServer()
