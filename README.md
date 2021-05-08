@@ -68,9 +68,9 @@ $ ./bitcandle retrieve \
 ```bash
 $ mkdir data
 $ cp ~/Downloads/image.jpg ./data/
-$ docker run -it --rm -v $PWD/data aureleoules/bitcandle inject -f ./image.jpg [args]
+$ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle inject -f ./image.jpg [args]
 ...
-$ docker run -it --rm -v $PWD/data aureleoules/bitcandle retrieve [args]
+$ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle retrieve [args]
 ...
 ```
 
@@ -97,7 +97,7 @@ The redeem script needs to look like this:
 - OP_PUSHDATA [PUBKEY]
 - OP_CHECKSIG
 
-This redeem script is hashed and wrapped in a P2SH output script to create a P2SH address such as : 3N9fEcf9yUSspvUc78cQQVJDQi5NkgrHtLQ.  
+This redeem script is hashed and wrapped in a P2SH output script to create a P2SH address such as: 3N9fEcf9yUSspvUc78cQQVJDQi5NkgrHtLQ.  
 
 The user must send enough funds to this address so that this UTXO can be spent.  
 

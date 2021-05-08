@@ -83,6 +83,11 @@ var injectCmd = &cobra.Command{
 			errInjectHelp(err.Error())
 		}
 
+		if len(data) > 85*1024 {
+			fmt.Println(logsymbols.Error, "File is too large.")
+			os.Exit(1)
+		}
+
 		fmt.Println(logsymbols.Success, "Loaded", len(data), "bytes to inject.")
 
 		if len(data) < 800 {
@@ -170,16 +175,10 @@ var injectCmd = &cobra.Command{
 		s.Stop()
 		fmt.Println(logsymbols.Success, "Connected to electrum server ("+electrumServer+").")
 
-		cost, costPerInput, txBytesLen, err := inject.EstimateCost()
+		cost, costPerInput, err := inject.EstimateCost()
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println(logsymbols.Error, "Could not estimate injection cost.")
-			os.Exit(1)
-		}
-
-		fmt.Println(txBytesLen)
-		if txBytesLen > 101000 {
-			fmt.Println(logsymbols.Error, "File is too large.")
 			os.Exit(1)
 		}
 
