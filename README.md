@@ -123,7 +123,7 @@ We must also add the PUBKEY and the CHECKSIG op code so that transactions output
 This redeem script ensures data integrity and prevents output sniping.  
 
 ### P2SH script signature
-In order to spend the UTXO and essentially store the file, we must create a script signature that can unlock the redeem script built previously.  
+In order to spend the UTXO and essentially store the file, we must create a script signature that unlocks the redeem script built previously.  
 It looks something like this:  
 * OP_PUSHDATA [SIG]
 * OP_PUSHDATA [CHUNK 1]
@@ -135,12 +135,12 @@ Chunks of data pushed using the PUSHDATA op code can only fit a maximum of 520 b
 So we are only able to store 1461 bytes per UTXO. For larger files, multiple UTXOs must be created using different redeem scripts.
 
 ### Notes
-Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.  
-Not a single satoshi is burned in the data injection process. This is a clear advantage compared to other known injection methods like P2PKH. All the fees go back to miners and the change is sent to the address specified.
+* Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.  
+* Not a single satoshi is burned in the data injection process. This is a clear advantage compared to other known injection methods like P2PKH. All the fees go back to miners and the change is sent to the address specified.
 
 ## Use cases
 This software can be useful to
-* store censorship restistant documents
+* store censorship resistant documents
 * store pictures of loved ones we wish to remember forever
 * store documents publicly and permanently accessible
 
