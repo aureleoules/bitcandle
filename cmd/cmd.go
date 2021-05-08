@@ -22,15 +22,3 @@ func Run() {
 		os.Exit(1)
 	}
 }
-
-func getDefaultElectrumServer(network Network) string {
-	switch network {
-	case Mainnet:
-		return "blockstream.info:110"
-	case Testnet:
-		return "blockstream.info:143"
-	case RegressionTest:
-		return "localhost:50001"
-	}
-	return ""
-}

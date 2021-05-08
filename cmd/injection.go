@@ -2,23 +2,19 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/aureleoules/bitcandle/consensus"
-	"github.com/aureleoules/bitcandle/injection"
+	"github.com/aureleoules/bitcandle/electrum"
+	"github.com/aureleoules/bitcandle/injector"
 	"github.com/briandowns/spinner"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/checksum0/go-electrum/electrum"
 	"github.com/guumaster/logsymbols"
 	"github.com/mdp/qrterminal"
 	"github.com/spf13/cobra"
@@ -26,33 +22,14 @@ import (
 )
 
 var (
-	filePath        string
-	privateKeyPath  string
-	network         Network
-	injectionMethod InjectionMethod
-	feeRate         int
-	changeAddress   string
+	filePath       string
+	privateKeyPath string
+	network        Network
+	feeRate        int
+	changeAddress  string
 )
 
-type InjectionMethod enumflag.Flag
-
-// ② Define the enumeration values for FooMode.
-const (
-	Auto InjectionMethod = iota
-	P2FKH
-	P2FK
-	P2SH
-	OP_RETURN
-)
-
-var InjectionMethodIds = map[InjectionMethod][]string{
-	Auto:      {"auto"},
-	P2FKH:     {"p2fkh"},
-	P2FK:      {"p2fk"},
-	P2SH:      {"p2sh"},
-	OP_RETURN: {"op_return"},
-}
-
+// Network represents an enum of different bitcoin networks
 type Network enumflag.Flag
 
 // ② Define the enumeration values for FooMode.
@@ -62,6 +39,7 @@ const (
 	RegressionTest
 )
 
+// NetworkIds mapper
 var NetworkIds = map[Network][]string{
 	Mainnet:        {"mainnet"},
 	Testnet:        {"testnet"},
@@ -69,9 +47,6 @@ var NetworkIds = map[Network][]string{
 }
 
 func init() {
-	injectCmd.PersistentFlags().VarP(
-		enumflag.New(&injectionMethod, "method", InjectionMethodIds, enumflag.EnumCaseInsensitive), "method", "m", "injection method; can be 'auto', 'p2fkh', 'p2fk', 'p2sh' or 'op_return'")
-
 	injectCmd.PersistentFlags().VarP(
 		enumflag.New(&network, "network", NetworkIds, enumflag.EnumCaseInsensitive), "network", "n", "bitcoin network; can be 'mainnet', 'testnet' or 'regtest'")
 
@@ -99,25 +74,34 @@ var injectCmd = &cobra.Command{
 			electrumServer = getDefaultElectrumServer(network)
 		}
 
+		// Load file to inject
 		data, err := ioutil.ReadFile(filePath)
 		if err != nil {
 			errInjectHelp(err.Error())
 		}
+
 		fmt.Println(logsymbols.Success, "Loaded", len(data), "bytes to inject.")
+
+		if len(data) < 800 {
+			fmt.Println(logsymbols.Warn, "It is not recommended to use this injection method for files less than 800 bytes as there are more optimized ones for smaller files.")
+		}
 
 		if len(data) > consensus.P2SHInputDataLimit {
 			fmt.Println(logsymbols.Warn, fmt.Sprintf("File is too large (> %d bytes) for a single input.", consensus.P2SHInputDataLimit))
 		}
 
+		// Load private key
 		key, err := loadKey(privateKeyPath)
 		if err != nil {
 			errInjectHelp(err.Error())
 		}
 		fmt.Println(logsymbols.Success, "Loaded private key.")
 
+		// Load chain params
 		netParams := loadChainParams(network)
 
-		inject, err := injection.NewP2SHInjection(data, feeRate, key, netParams)
+		// Create file injector
+		inject, err := injector.NewP2SHInjection(data, feeRate, key, netParams)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not prepare injection data.")
 			os.Exit(1)
@@ -126,8 +110,8 @@ var injectCmd = &cobra.Command{
 		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Connecting to electrum server..."))
 		s.Start()
 
-		client := electrum.NewServer()
-		err = client.ConnectTCP(electrumServer)
+		// Connect to electrum
+		err = electrum.Connect(electrumServer)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not connect to electrum server.")
 			os.Exit(1)
@@ -161,87 +145,25 @@ var injectCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		var wg sync.WaitGroup
-		wg.Add(inject.NumInputs())
-
-		var paymentsReceived int
-
 		s = spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Waiting for payments..."))
 		s.Start()
 
-		for j, p2shAddr := range inject.Addresses {
-			go func(addr *btcutil.AddressScriptHash, j int) {
-				defer wg.Done()
+		// Wait for utxos to be created by the user
+		err = inject.WaitPayments(func(addr string, num int) {
+			s.Stop()
+			fmt.Println(logsymbols.Success, fmt.Sprintf("Payment received. (%d/%d)", num, inject.NumInputs()))
+			s.Start()
+		})
 
-				for {
-					script, err := txscript.PayToAddrScript(addr)
-					if err != nil {
-						fmt.Println(logsymbols.Error, "Could not build P2SH script.")
-					}
-					scriptHash := sha256.Sum256(script)
-					reversedScriptHash := ReverseBytes(scriptHash[:])
-					reversedScriptHashHex := hex.EncodeToString(reversedScriptHash)
-
-					history, err := client.GetHistory(reversedScriptHashHex)
-					if err != nil {
-						s.Stop()
-						fmt.Println(logsymbols.Error, "Could not retrieve transactions.")
-						os.Exit(1)
-					}
-
-					for _, h := range history {
-						rawtx, err := client.GetRawTransaction(h.Hash)
-						if err != nil {
-							s.Stop()
-							fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
-							os.Exit(1)
-						}
-
-						var tx wire.MsgTx
-						rawtxBytes, err := hex.DecodeString(rawtx)
-						if err != nil {
-							s.Stop()
-							fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
-							os.Exit(1)
-						}
-						err = tx.Deserialize(bytes.NewReader(rawtxBytes))
-						if err != nil {
-							s.Stop()
-							fmt.Println(logsymbols.Error, "Could not decode transaction.")
-							os.Exit(1)
-						}
-
-						for i, vout := range tx.TxOut {
-							if bytes.Equal(vout.PkScript, script) {
-								txHash, err := chainhash.NewHashFromStr(h.Hash)
-								if err != nil {
-									s.Stop()
-									fmt.Println(logsymbols.Error, "Invalid transaction id.")
-									os.Exit(1)
-								}
-
-								inject.Addresses[j].UTXO = wire.NewOutPoint(txHash, uint32(i))
-
-								paymentsReceived++
-								s.Stop()
-								fmt.Println(logsymbols.Success, fmt.Sprintf("Payment received. (%d/%d)", paymentsReceived, inject.NumInputs()))
-								s.Start()
-								return
-							}
-						}
-					}
-
-					time.Sleep(time.Second)
-				}
-			}(p2shAddr.Address, j)
+		if err != nil {
+			fmt.Println(logsymbols.Error, err.Error())
+			s.Stop()
+			os.Exit(1)
 		}
 
-		wg.Wait()
-
-		s.Stop()
 		fmt.Println(logsymbols.Success, "All payments received.")
 
-		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams) // chain params do not matter
+		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -259,7 +181,8 @@ var injectCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.GetRawTransaction(tx.TxHash().String())
+		// Checks if transaction has been mined already
+		_, err = electrum.Client.GetRawTransaction(tx.TxHash().String())
 		if err == nil {
 			fmt.Println(logsymbols.Warn, "Data already injected.")
 			fmt.Println(logsymbols.Info, "TxID:", tx.TxHash().String())
@@ -270,9 +193,7 @@ var injectCmd = &cobra.Command{
 			var txBytes bytes.Buffer
 			tx.Serialize(&txBytes)
 
-			fmt.Println(hex.EncodeToString(txBytes.Bytes()))
-
-			txid, err := client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
+			txid, err := electrum.Client.BroadcastTransaction(hex.EncodeToString(txBytes.Bytes()))
 			if err != nil {
 				s.Stop()
 				fmt.Println(logsymbols.Error, "Could not broadcast transaction.")
@@ -286,34 +207,8 @@ var injectCmd = &cobra.Command{
 	},
 }
 
-func loadChainParams(net Network) *chaincfg.Params {
-	switch net {
-	case Mainnet:
-		return &chaincfg.MainNetParams
-	case Testnet:
-		return &chaincfg.TestNet3Params
-	case RegressionTest:
-		return &chaincfg.RegressionNetParams
-	}
-
-	return nil
-}
-
 func errInjectHelp(err string) {
 	fmt.Println("error: " + err)
 	fmt.Println(`Please see "bitcandle inject --help" for more information.`)
 	os.Exit(1)
-}
-
-// ReverseBytes reverses a byte slice
-func ReverseBytes(s []byte) []byte {
-	res := make([]byte, len(s))
-	prevPos, resPos := 0, len(s)
-	for pos := range s {
-		resPos -= pos - prevPos
-		copy(res[resPos:], s[prevPos:pos])
-		prevPos = pos
-	}
-	copy(res[0:], s[prevPos:])
-	return res
 }

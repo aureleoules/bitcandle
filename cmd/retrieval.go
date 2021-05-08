@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/aureleoules/bitcandle/retrieval"
+	"github.com/aureleoules/bitcandle/electrum"
+	"github.com/aureleoules/bitcandle/injector"
 	"github.com/briandowns/spinner"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/checksum0/go-electrum/electrum"
 	"github.com/guumaster/logsymbols"
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag"
@@ -53,8 +53,7 @@ var retrieveCmd = &cobra.Command{
 		s := spinner.New(spinner.CharSets[9], 100*time.Millisecond, spinner.WithSuffix(" Connecting to electrum server..."))
 		s.Start()
 
-		client := electrum.NewServer()
-		err := client.ConnectTCP(electrumServer)
+		err := electrum.Connect(electrumServer)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not connect to electrum server.")
 			os.Exit(1)
@@ -63,7 +62,7 @@ var retrieveCmd = &cobra.Command{
 		s.Stop()
 		fmt.Println(logsymbols.Success, "Connected to electrum server ("+electrumServer+").")
 
-		rawtx, err := client.GetRawTransaction(txHash)
+		rawtx, err := electrum.Client.GetRawTransaction(txHash)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not retrieve transaction.")
 			os.Exit(1)
@@ -83,7 +82,7 @@ var retrieveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, err := retrieval.P2SHRetrieveData(tx.TxIn)
+		data, err := injector.P2SHRetrieveData(tx.TxIn)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not parse data.")
 			os.Exit(1)

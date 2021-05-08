@@ -1,24 +1,23 @@
-package retrieval
+package injector
 
 import (
 	"encoding/hex"
-	"fmt"
-	"os"
+	"errors"
 	"strings"
 
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/guumaster/logsymbols"
 )
 
+// P2SHRetrieveData takes a list of transaction inputs and decodes the signature scripts that contain the file
 func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
 	var data []byte
 
 	for _, input := range inputs {
+		// Disassemble the signature script to make parsing easier
 		asmScript, err := txscript.DisasmString(input.SignatureScript)
 		if err != nil {
-			fmt.Println(logsymbols.Error, "Could not disassemble script signature.")
-			os.Exit(1)
+			return nil, errors.New("could not disassemble script signature")
 		}
 
 		scriptParts := strings.Split(asmScript, " ")
@@ -30,6 +29,7 @@ func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
 				return nil, err
 			}
 
+			// Concat each chunk of 520 bytes (max)
 			data = append(data, chunkBytes...)
 		}
 	}

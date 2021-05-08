@@ -1,4 +1,4 @@
-package injection
+package injector
 
 import "github.com/aureleoules/bitcandle/util"
 

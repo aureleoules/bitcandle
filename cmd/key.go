@@ -21,7 +21,7 @@ var genKeyCmd = &cobra.Command{
 		if len(args) > 0 {
 			outputPath = args[0]
 		} else {
-			outputPath = "key.bin"
+			outputPath = "./key.bin"
 		}
 
 		_, err := os.Stat(outputPath)
@@ -42,14 +42,4 @@ var genKeyCmd = &cobra.Command{
 		}
 		fmt.Println("Private key successfully generated at \"" + outputPath + "\".")
 	},
-}
-
-func loadKey(path string) (*btcec.PrivateKey, error) {
-	key, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	pKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), key)
-	return pKey, nil
 }
