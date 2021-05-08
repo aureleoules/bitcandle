@@ -52,7 +52,7 @@ func init() {
 
 	injectCmd.Flags().StringVarP(&filePath, "file", "f", "", "path of the file to inject on Bitcoin")
 	injectCmd.Flags().StringVarP(&privateKeyPath, "key", "k", "key.hex", "path of a private key to sign transactions")
-	injectCmd.Flags().StringVarP(&changeAddress, "change-addr", "c", "", "address to receive change (548 sats)")
+	injectCmd.Flags().StringVarP(&changeAddress, "change-address", "c", "", "address to receive change (548 sats)")
 	injectCmd.Flags().IntVar(&feeRate, "fee", 5, "fee rate (sat/B)")
 
 	rootCmd.AddCommand(injectCmd)
@@ -86,6 +86,10 @@ var injectCmd = &cobra.Command{
 			fmt.Println(logsymbols.Warn, "It is not recommended to use this injection method for files less than 800 bytes as there are more optimized ones for smaller files.")
 		}
 
+		if changeAddress == "" {
+			fmt.Println(logsymbols.Warn, "No change address has been provided. Defaulting to provided public key's P2PKH address.")
+		}
+
 		if len(data) > consensus.P2SHInputDataLimit {
 			fmt.Println(logsymbols.Warn, fmt.Sprintf("File is too large (> %d bytes) for a single input.", consensus.P2SHInputDataLimit))
 		}
@@ -99,6 +103,22 @@ var injectCmd = &cobra.Command{
 
 		// Load chain params
 		netParams := loadChainParams(network)
+
+		var addr btcutil.Address
+
+		if changeAddress != "" {
+			addr, err = btcutil.DecodeAddress(changeAddress, netParams)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		} else {
+			addr, err = btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		}
 
 		// Create file injector
 		inject, err := injector.NewP2SHInjection(data, feeRate, key, netParams)
@@ -122,6 +142,7 @@ var injectCmd = &cobra.Command{
 
 		cost, costPerInput, err := inject.EstimateCost()
 		if err != nil {
+			fmt.Println(err)
 			fmt.Println(logsymbols.Error, "Could not estimate injection cost.")
 			os.Exit(1)
 		}
@@ -162,12 +183,6 @@ var injectCmd = &cobra.Command{
 		}
 
 		fmt.Println(logsymbols.Success, "All payments received.")
-
-		addr, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(key.PubKey().SerializeCompressed()), netParams)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
 
 		payToAddrScript, err := txscript.PayToAddrScript(addr)
 		if err != nil {

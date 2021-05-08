@@ -46,7 +46,7 @@ func NewP2SHInjection(data []byte, feeRate int, key *btcec.PrivateKey, network *
 	injection := P2SHInjection{
 		// Create as many inputs as needed
 		// There can only be 1461 bytes encoded in each input
-		parts:      dataToChunks(data, consensus.P2SHInputDataLimit),
+		parts:      dataToParts(data),
 		Network:    network,
 		FeeRate:    feeRate,
 		privateKey: key,
