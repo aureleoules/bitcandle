@@ -21,6 +21,9 @@ func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
 		}
 
 		scriptParts := strings.Split(asmScript, " ")
+		if len(scriptParts) <= 2 {
+			return nil, errors.New("invalid signature script")
+		}
 		chunks := scriptParts[1 : len(scriptParts)-1]
 
 		for _, c := range chunks {
@@ -31,7 +34,6 @@ func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
 
 			// Concat each chunk of 520 bytes (max)
 			data = append(data, chunkBytes...)
-
 		}
 	}
 
