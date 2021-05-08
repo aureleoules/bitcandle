@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -11,7 +10,6 @@ import (
 	"github.com/aureleoules/bitcandle/electrum"
 	"github.com/aureleoules/bitcandle/injector"
 	"github.com/briandowns/spinner"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/guumaster/logsymbols"
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag"
@@ -68,21 +66,14 @@ var retrieveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var tx wire.MsgTx
 		rawtxBytes, err := hex.DecodeString(rawtx)
 		if err != nil {
 			s.Stop()
 			fmt.Println(logsymbols.Error, "Could not decode transaction hex.")
 			os.Exit(1)
 		}
-		err = tx.Deserialize(bytes.NewReader(rawtxBytes))
-		if err != nil {
-			s.Stop()
-			fmt.Println(logsymbols.Error, "Could not decode transaction.")
-			os.Exit(1)
-		}
 
-		data, err := injector.P2SHRetrieveData(tx.TxIn)
+		data, err := injector.P2SHRetrieveData(rawtxBytes)
 		if err != nil {
 			fmt.Println(logsymbols.Error, "Could not parse data.")
 			os.Exit(1)

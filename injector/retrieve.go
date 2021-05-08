@@ -1,6 +1,7 @@
 package injector
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -10,10 +11,17 @@ import (
 )
 
 // P2SHRetrieveData takes a list of transaction inputs and decodes the signature scripts that contain the file
-func P2SHRetrieveData(inputs []*wire.TxIn) ([]byte, error) {
+func P2SHRetrieveData(rawTxBytes []byte) ([]byte, error) {
+	var tx wire.MsgTx
+
+	err := tx.Deserialize(bytes.NewReader(rawTxBytes))
+	if err != nil {
+		return nil, errors.New("could not decode transaction")
+	}
+
 	var data []byte
 
-	for _, input := range inputs {
+	for _, input := range tx.TxIn {
 		// Disassemble the signature script to make parsing easier
 		asmScript, err := txscript.DisasmString(input.SignatureScript)
 		if err != nil {
