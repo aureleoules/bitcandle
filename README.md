@@ -1,6 +1,8 @@
 # Bitcandle
 Bitcandle allows you to store arbitrary data on Bitcoin **very** efficiently up to 83 kB by using P2SH signature scripts.
 
+[8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a](https://blockstream.info/tx/8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a)
+
 ## Disclaimer
 Storing data on Bitcoin is a controversial subject as it bloats the blockchain with _somewhat unnecessary_ data.  
 I built this tool to show that there exists efficient methods of storing data, lesser known than standard P2PKH / P2PK / OP_RETURN methods.
@@ -27,41 +29,44 @@ Use "bitcandle [command] --help" for more information about a command.
 $ ./bitcandle inject \
     --fee 1 \
     --file ./image.jpg \
-    --network testnet \
-    --change-address bcrt1q3yqqaenczxs9uytz55c0xhdrunqd2efq2wlnaq
+    --network mainnet \
+    --change-address bc1q8sl9tnvnuc8z7q80u9wffdf9ugt4arrp6vlamg
 
-✔ Loaded 3072 bytes to inject.
+✔ Loaded 4556 bytes to inject.
 ⚠ File is too large (> 1461 bytes) for a single input.
-✔ Loaded private key.
-✔ Connected to electrum server (localhost:50001).
-ℹ Estimated injection cost: 0.00004307 BTC.
-ℹ You must send 0.00001436 BTC to 2N1tyf6uJvpgup147SUEGjKi3dYpQXBqtNY.
-ℹ You must send 0.00001436 BTC to 2N2NcYkDrc9A4F9gFtajg8dxgNMfe8EmLPF.
-ℹ You must send 0.00001436 BTC to 2N9U5GHc6XC3FfrTy9M3LDLfB4yFWTE1Mgx.
+✔ Loaded existing private key.
+✔ Connected to electrum server (blockstream.info:110).
+ℹ Estimated injection cost: 0.00006020 BTC.
+ℹ You must send 0.00001505 BTC to 34YX7kYCMqUVeYRPoMKUm1FD1bxv7pi9S3.
+ℹ You must send 0.00001505 BTC to 3Ms87yBeExmpqrCmhZsJP9Je7goVg5WeZA.
+ℹ You must send 0.00001505 BTC to 3HNiuWwvz5CZ4yZ1dY6iH3XmJb1FnUUoZm.
+ℹ You must send 0.00001505 BTC to 3Bi1dkJQhZ8sd7Neo1DV4oj4gCLVV5p6LU.
 ℹ Copy paste this in Electrum -> Tools -> Pay to many.
 
-2N1tyf6uJvpgup147SUEGjKi3dYpQXBqtNY,0.00001436
-2N2NcYkDrc9A4F9gFtajg8dxgNMfe8EmLPF,0.00001436
-2N9U5GHc6XC3FfrTy9M3LDLfB4yFWTE1Mgx,0.00001436
+34YX7kYCMqUVeYRPoMKUm1FD1bxv7pi9S3,0.00001505
+3Ms87yBeExmpqrCmhZsJP9Je7goVg5WeZA,0.00001505
+3HNiuWwvz5CZ4yZ1dY6iH3XmJb1FnUUoZm,0.00001505
+3Bi1dkJQhZ8sd7Neo1DV4oj4gCLVV5p6LU,0.00001505
 
-✔ Payment received. (1/3)
-✔ Payment received. (2/3)
-✔ Payment received. (3/3)
+✔ Payment received. (2/4)
+✔ Payment received. (4/4)
+✔ Payment received. (4/4)
+✔ Payment received. (3/4)
 ✔ All payments received.
 ✔ Data injected.
-ℹ TxID: 006a6f058bd756eb5693eb5319bcdc3c78649b9efd3beeb2a8f85e6841b9ce21
+ℹ TxID: 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a
 ```
 
 #### Retrieve data
 ```bash
 $ ./bitcandle retrieve \
-    --tx 006a6f058bd756eb5693eb5319bcdc3c78649b9efd3beeb2a8f85e6841b9ce21 \
-    --network testnet \
-    -o /tmp/data
+    --tx 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a \
+    --network mainnet \
+    -o /tmp/image.jpg
 
 ✔ Connected to electrum server (localhost:50001).
 ✔ Retrieved file.
-✔ Saved file to "/tmp/data".
+✔ Saved file to "/tmp/image.jpg".
 ```
 
 ## Docker
@@ -72,6 +77,14 @@ $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle inject -f ./image
 ...
 $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle retrieve [args]
 ...
+```
+
+### Working example
+```bash
+$ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle \
+    retrieve \
+    --tx 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a \
+    -o /data/image.jpg
 ```
 
 ## Cost
