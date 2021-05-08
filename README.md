@@ -64,7 +64,7 @@ $ ./bitcandle retrieve \
     --network mainnet \
     -o /tmp/image.jpg
 
-✔ Connected to electrum server (localhost:50001).
+✔ Connected to electrum server (blockstream.info:110).
 ✔ Retrieved file.
 ✔ Saved file to "/tmp/image.jpg".
 ```
@@ -89,7 +89,7 @@ $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle \
 
 ## Cost
 Before injecting data we need to create P2SH UTXOs. This can be done in a single transaction, sent by the user, by sending coins to many outputs.   
-To spend the P2SH UTXOs (injecting data), it costs roughly **0.000011940 BTC per kB**. (**1 sat/B** fee rate)  
+To spend the P2SH UTXOs (injecting data), it costs roughly **0.00001194 BTC per kB**. (**1 sat/B** fee rate)  
 It is _obviously_ free to retrieve data at any given time.
 
 ## How it works
