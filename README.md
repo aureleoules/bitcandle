@@ -122,7 +122,8 @@ Chunks of data pushed using the PUSHDATA op code can only fit a maximum of 520 b
 So we are only able to store 1461 bytes per UTXO. For larger files, multiple UTXOs must be created using different redeem scripts.
 
 ### Notes
-Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.
+Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.  
+Not a single satoshi is burned in the data injection process. This is a clear advantage compared to other known injection methods like P2PKH. All the fees go back to miners and the change is sent to the address specified.
 
 ## Use cases
 This software can be useful to
