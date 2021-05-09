@@ -1,11 +1,18 @@
 # Bitcandle
-Bitcandle allows you to store arbitrary data on Bitcoin **very** efficiently up to 83 kB by using P2SH signature scripts.
+Store data on Bitcoin for 350 sats/KB up to 185 kB by using P2SH-P2WSH witness scripts.
 
-[8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a](https://blockstream.info/tx/8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a)
+[225ed8bc432d37cf434f80717286fd5671f676f12b573294db72a2a8f9b1e7ba](https://blockstream.info/tx/225ed8bc432d37cf434f80717286fd5671f676f12b573294db72a2a8f9b1e7ba)
 
 ## Disclaimer
 Storing data on Bitcoin is a controversial subject as it bloats the blockchain with _somewhat unnecessary_ data.  
-I built this tool to show that there exists efficient methods of storing data, lesser known than standard P2PKH / P2PK / OP_RETURN methods.
+I built this tool to show that there exists an efficient method of storing data: P2SH-P2WSH, lesser known than standard P2PKH / P2PK / OP_RETURN methods.
+
+## Cost
+Before injecting data we need to create P2SH-P2WSH UTXOs. This can be done in a single transaction, sent by the user, by sending coins to many outputs.   
+To spend the P2SH-P2WSH UTXOs (injecting data), it costs roughly **0.00000349 BTC per KB**. (**1 sat/B** fee rate).  
+This is about **84 times** cheaper than the P2PKH injection method. 
+
+It is _obviously_ free to retrieve data.
 
 ## Usage
 ```bash
@@ -33,34 +40,41 @@ $ ./bitcandle inject \
     --change-address bc1q8sl9tnvnuc8z7q80u9wffdf9ugt4arrp6vlamg
 
 ✔ Loaded 4556 bytes to inject.
-⚠ File is too large (> 1461 bytes) for a single input.
 ✔ Loaded existing private key.
 ✔ Connected to electrum server (blockstream.info:110).
-ℹ Estimated injection cost: 0.00006020 BTC.
-ℹ You must send 0.00001505 BTC to 34YX7kYCMqUVeYRPoMKUm1FD1bxv7pi9S3.
-ℹ You must send 0.00001505 BTC to 3Ms87yBeExmpqrCmhZsJP9Je7goVg5WeZA.
-ℹ You must send 0.00001505 BTC to 3HNiuWwvz5CZ4yZ1dY6iH3XmJb1FnUUoZm.
-ℹ You must send 0.00001505 BTC to 3Bi1dkJQhZ8sd7Neo1DV4oj4gCLVV5p6LU.
-ℹ Copy paste this in Electrum -> Tools -> Pay to many.
-
-34YX7kYCMqUVeYRPoMKUm1FD1bxv7pi9S3,0.00001505
-3Ms87yBeExmpqrCmhZsJP9Je7goVg5WeZA,0.00001505
-3HNiuWwvz5CZ4yZ1dY6iH3XmJb1FnUUoZm,0.00001505
-3Bi1dkJQhZ8sd7Neo1DV4oj4gCLVV5p6LU,0.00001505
-
-✔ Payment received. (2/4)
-✔ Payment received. (4/4)
-✔ Payment received. (4/4)
-✔ Payment received. (3/4)
+ℹ Estimated injection cost: 0.00002176 BTC.
+ℹ You must send 0.00002176 BTC to 33z4X8jkMd8WCzhrfgEigzgLyrap1ACWUE.
+█████████████████████████████████████████
+█████████████████████████████████████████
+████ ▄▄▄▄▄ ██▀▄███▀  ▀▄ ▀ ▄ ▀█ ▄▄▄▄▄ ████
+████ █   █ █▄▀█▄▀▀▄ ▀█▀▄▀█▀▀██ █   █ ████
+████ █▄▄▄█ ██▄▀▀ ▄       █ ▀▀█ █▄▄▄█ ████
+████▄▄▄▄▄▄▄█ █▄▀▄█▄▀▄▀ ▀ ▀ █ █▄▄▄▄▄▄▄████
+████▄ ▄▀  ▄  ▀█▀ ▀███▄█▀ ▄▀█   ███ ▀▀████
+████ ▀ ▄ █▄█ ▀ ▄ ▀ █▄ ▀▀▀ ▄█ █▀▀▀▄█▄ ████
+████▄▄▄▀██▄▀ █  ██ ██ ▀▀▀ ██  ▄██▀▀▀ ████
+█████▀ ▀▀▄▄▀ ▄▀▀█▄█▀▄▀▀█▀ ▀█▄▄█▀ ▄▄ ▄████
+████▄▄ █▄▀▄▀▀█ ▀ ▀███▄█▀▀███▀   ██▀▄ ████
+████▄▀▀▄ ▀▄███▀▄ ▀ ▀▄ ███▀█▀▄ ▄▀ ▀█▄▄████
+████▄▄▄▀ ▀▄▀█▀█ ██ ██ ▀▀ ▄▀▄ █ ▄▄ ▀▀▀████
+████▄▀▀▄ ▄▄▀  █▀█▄█▀▄▀█▀█▀ █▄▀██▄▀█  ████
+████▄█▄███▄▄ █▄▀ ▀███▄ ▀  ▀▄ ▄▄▄  █▀ ████
+████ ▄▄▄▄▄ █ ██▄ ▀ ▀▄▀▀▀█ ▄▄ █▄█  █ ▄████
+████ █   █ █▄   ██ ██  ██ ██ ▄▄▄  █▄▀████
+████ █▄▄▄█ █ █▀▀█▄██ ▀▄▀▄▀ ▀▄▄▄▀ ▄█▀▄████
+████▄▄▄▄▄▄▄█▄█▄█▄██▄▄▄▄██▄█▄▄▄███▄█▄▄████
+█████████████████████████████████████████
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+✔ Payment received. (1/1)
 ✔ All payments received.
 ✔ Data injected.
-ℹ TxID: 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a
+ℹ TxID: 225ed8bc432d37cf434f80717286fd5671f676f12b573294db72a2a8f9b1e7ba
 ```
 
 #### Retrieve data
 ```bash
 $ ./bitcandle retrieve \
-    --tx 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a \
+    --tx 225ed8bc432d37cf434f80717286fd5671f676f12b573294db72a2a8f9b1e7ba \
     --network mainnet \
     -o /tmp/image.jpg
 
@@ -83,22 +97,17 @@ $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle retrieve [args]
 ```bash
 $ docker run -it --rm -v $PWD/data:/data aureleoules/bitcandle \
     retrieve \
-    --tx 8dc2785335c59df6c00257f9b20e5df9b932a717f97066b279e292faba71a67a \
+    --tx 225ed8bc432d37cf434f80717286fd5671f676f12b573294db72a2a8f9b1e7ba \
     -o /data/image.jpg
 ```
 
-## Cost
-Before injecting data we need to create P2SH UTXOs. This can be done in a single transaction, sent by the user, by sending coins to many outputs.   
-To spend the P2SH UTXOs (injecting data), it costs roughly **0.00001194 BTC per kB**. (**1 sat/B** fee rate)  
-It is _obviously_ free to retrieve data at any given time.
-
 ## How it works
-This tool uses script signatures in P2SH inputs to store data.  
-Instead of storing data in the transaction outputs like standard approaches such as P2PKH, P2PK or OP_RETURN, this tool stores data in the transaction inputs.  
+This tool uses witness scripts in P2SH-P2WSH inputs to store data.  
+Instead of storing data in the transaction outputs like standard approaches such as P2PKH, P2PK or OP_RETURN, this tool stores data in the transaction inputs (witness).  
 
-### P2SH redeem script
-We need to create a new P2SH UTXO. To do that we need to create a redeem script hash address.  
-The redeem script needs to look like this:  
+### Witness script
+We need to create a new P2SH-P2WSH UTXO. To do that we need to create a witness script.  
+The script needs to look like this:  
 - OP_HASH160
 - OP_PUSHDATA [CHUNK 3 HASH]
 - OP_EQUALVERIFY 
@@ -111,7 +120,7 @@ The redeem script needs to look like this:
 - OP_PUSHDATA [PUBKEY]
 - OP_CHECKSIG
 
-This redeem script is hashed and wrapped in a P2SH output script to create a P2SH address such as: 3N9fEcf9yUSspvUc78cQQVJDQi5NkgrHtLQ.  
+This witness script is hashed and wrapped in a P2SH-P2WSH output script to create a P2SH-P2WSH address such as: 3N9fEcf9yUSspvUc78cQQVJDQi5NkgrHtLQ.  
 
 The user must send enough funds to this address so that this UTXO can be spent.  
 
@@ -122,21 +131,21 @@ We must also add the PUBKEY and the CHECKSIG op code so that transactions output
 
 This redeem script ensures data integrity and prevents output sniping.  
 
-### P2SH script signature
-In order to spend the UTXO and essentially store the file, we must create a script signature that unlocks the redeem script built previously.  
+### Witness data
+In order to spend the UTXO and essentially store the file, we must include a witness unlocks the witness script built previously.  
 It looks something like this:  
-* OP_PUSHDATA [SIG]
-* OP_PUSHDATA [CHUNK 1]
-* OP_PUSHDATA [CHUNK 2]
-* OP_PUSHDATA [CHUNK 3]
-* OP_PUSHDATA [redeem script hex]
+* [SIG]
+* [CHUNK 1]
+* [CHUNK 2]
+* [CHUNK 3]
+* [witness script hex]
 
-Chunks of data pushed using the PUSHDATA op code can only fit a maximum of 520 bytes which means the redeem script can only be 520 bytes.  
-So we are only able to store 1461 bytes per UTXO. For larger files, multiple UTXOs must be created using different redeem scripts.
+This is not a script, this is simply a stack of data. It can only fit 99 chunks of 80 bytes of data.  
+For larger files, multiple UTXOs must be created using different witness scripts.
 
 ### Notes
-* Redeem scripts are built deterministically such that for the same file and same public key, the P2SH addresses will remain the same. This may help easily retrieving any stuck funds if needed.  
-* Not a single satoshi is burned in the data injection process. This is a clear advantage compared to other known injection methods like P2PKH. All the fees go back to miners and the change is sent to the address specified.
+Witness scripts are built deterministically such that for the same file and same public key, the P2SH-P2WSH addresses will remain the same. This may help easily retrieving any stuck funds if needed.  
+Not a single satoshi is burned in the data injection process. This is a clear advantage compared to other known injection methods like P2PKH. All the fees go back to miners and the change is sent to the address specified.
 
 ## Use cases
 This software can be useful to

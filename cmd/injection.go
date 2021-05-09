@@ -83,7 +83,7 @@ var injectCmd = &cobra.Command{
 			errInjectHelp(err.Error())
 		}
 
-		if len(data) > 85*1024 {
+		if len(data) > 285*1024 {
 			fmt.Println(logsymbols.Error, "File is too large.")
 			os.Exit(1)
 		}
@@ -96,10 +96,6 @@ var injectCmd = &cobra.Command{
 
 		if changeAddress == "" {
 			fmt.Println(logsymbols.Warn, "No change address has been provided. Defaulting to provided public key's P2PKH address.")
-		}
-
-		if len(data) > consensus.P2SHInputDataLimit {
-			fmt.Println(logsymbols.Warn, fmt.Sprintf("File is too large (> %d bytes) for a single input.", consensus.P2SHInputDataLimit))
 		}
 
 		md5hasher := md5.New()
@@ -156,8 +152,9 @@ var injectCmd = &cobra.Command{
 		}
 
 		// Create file injector
-		inject, err := injector.NewP2SHInjection(data, feeRate, key, netParams)
+		inject, err := injector.NewInjection(data, feeRate, key, netParams)
 		if err != nil {
+			fmt.Println(err)
 			fmt.Println(logsymbols.Error, "Could not prepare injection data.")
 			os.Exit(1)
 		}
@@ -182,13 +179,13 @@ var injectCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println(logsymbols.Info, fmt.Sprintf("Estimated injection cost: %.8f BTC.", cost))
+		fmt.Println(logsymbols.Info, fmt.Sprintf("Estimated injection cost: %.8f BTC.", float64(cost)/consensus.BTCSats))
 
 		for _, addr := range inject.Addresses {
-			fmt.Println(logsymbols.Info, fmt.Sprintf("You must send %.8f BTC to %s.", costPerInput, addr.Address.EncodeAddress()))
+			fmt.Println(logsymbols.Info, fmt.Sprintf("You must send %.8f BTC to %s.", float64(costPerInput)/consensus.BTCSats, addr.Address.EncodeAddress()))
 
 			if len(inject.Addresses) == 1 {
-				qrterminal.GenerateHalfBlock(fmt.Sprintf("bitcoin:%s?amount=%.8f", addr.Address.EncodeAddress(), costPerInput), qrterminal.L, os.Stdout)
+				qrterminal.GenerateHalfBlock(fmt.Sprintf("bitcoin:%s?amount=%.8f", addr.Address.EncodeAddress(), float64(costPerInput)/consensus.BTCSats), qrterminal.L, os.Stdout)
 			}
 		}
 
@@ -196,7 +193,7 @@ var injectCmd = &cobra.Command{
 			fmt.Println(logsymbols.Info, "Copy paste this in Electrum -> Tools -> Pay to many.")
 			fmt.Println()
 			for _, addr := range inject.Addresses {
-				fmt.Println(fmt.Sprintf("%s,%.8f", addr.Address.EncodeAddress(), costPerInput))
+				fmt.Println(fmt.Sprintf("%s,%.8f", addr.Address.EncodeAddress(), float64(costPerInput)/consensus.BTCSats))
 			}
 			fmt.Println()
 		}
