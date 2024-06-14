@@ -125,7 +125,7 @@ This witness script is hashed and wrapped in a P2SH-P2WSH output script to creat
 The user must send enough funds to this address so that this UTXO can be spent.  
 
 Hashes of chunks are pushed on the stack in order to ensure data integrity.  
-Once we spend this UTXO, at attacker could scramble chunks of data and the transaction would this be valid if these op codes were not added.  
+Once we spend this UTXO, an attacker could scramble chunks of data and the transaction would still be valid if these op codes were not added.  
 
 We must also add the PUBKEY and the CHECKSIG op code so that transactions outputs are signed. This prevents attackers from redirecting the output change to another change address. This may not be necessary for small change amounts (minimum on mainnet is 546 sats) but it is recommended as it makes sure the transaction id does not change while the transaction is in the mempool.  
 
